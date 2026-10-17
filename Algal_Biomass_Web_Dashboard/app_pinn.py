@@ -23,15 +23,19 @@ from pinn_model import PINN
 
 st.set_page_config(page_title="PINN Biomass Dashboard", page_icon="🧬", layout="wide")
 
-DATA_PATH = "data/algal_growth_data.csv"
+GROWTH_DATA_PATH = "data/algal_growth_data.csv"
+DECAY_DATA_PATH = "data/algal_decay_100_days.csv"
 PINN_MODEL_PATH = "models/pinn_strong"
 DATA_MODEL_PATH = "models/data_only"
 
 
 @st.cache_data
-def load_data():
+def load_data(data_type='growth'):
     """Load the experimental data."""
-    return pd.read_csv(DATA_PATH)
+    if data_type == 'growth':
+        return pd.read_csv(GROWTH_DATA_PATH)
+    else:
+        return pd.read_csv(DECAY_DATA_PATH)
 
 
 @st.cache_resource
@@ -111,12 +115,27 @@ def predict_biomass(model_dict, input_df):
 
 
 # Load data and models
-df = load_data()
+st.sidebar.header("⚙️ Configuration")
+dataset_type = st.sidebar.radio(
+    "Select Dataset",
+    ["🌱 Growth (100 days)", "💀 Decay (100 days)"],
+    help="Choose between algal growth or decay dataset"
+)
+
+data_mode = 'growth' if '🌱' in dataset_type else 'decay'
+df = load_data(data_mode)
 models = load_models()
 
 # Header
 st.markdown("# 🧬 Physics-Informed Neural Network Dashboard")
 st.caption("FYP: Robust Algal Biomass Estimation under Sparse and Noisy Sensor Data")
+
+# Show active dataset
+if data_mode == 'growth':
+    st.success("📊 **Active Dataset:** Growth Phase (Days 1-100) | Biomass: 0.08 → 1.73 g/L")
+else:
+    st.warning("📊 **Active Dataset:** Decay Phase (Days 1-100) | Biomass: 1.80 → 0.36 g/L")
+
 st.caption("⚠️ SYNTHETIC DATA - Proof of Concept Only")
 
 # Sidebar navigation
@@ -150,13 +169,22 @@ else:
 if page == "📊 Overview & Data":
     st.header("Dataset Overview")
     
-    st.subheader("1. Biomass Growth Trajectory")
+    # Dataset info based on type
+    if data_mode == 'growth':
+        st.info("🌱 **Growth Dataset:** Shows algal biomass increasing from 0.08 to 1.73 g/L over 100 days under favorable conditions.")
+    else:
+        st.info("💀 **Decay Dataset:** Shows algal biomass declining from 1.80 to 0.36 g/L over 100 days due to nutrient depletion and suboptimal conditions.")
+    
+    st.subheader("1. Biomass Trajectory")
     fig = go.Figure()
+    
+    plot_title = "Measured Biomass - Growth" if data_mode == 'growth' else "Measured Biomass - Decay"
+    
     fig.add_trace(go.Scatter(
         x=df.Day, y=df.Biomass,
         mode='lines+markers',
-        name='Measured Biomass',
-        line=dict(width=3, color='#2E86AB')
+        name=plot_title,
+        line=dict(width=3, color=('#2E86AB' if data_mode == 'growth' else '#E63946'))
     ))
     
     # Add split markers
@@ -173,7 +201,10 @@ if page == "📊 Overview & Data":
     )
     st.plotly_chart(fig, use_container_width=True)
     
-    st.info("📍 Growth phases: Exponential (Days 1-50) → Stationary (Days 50-100)")
+    if data_mode == 'growth':
+        st.info("📍 Growth phases: Exponential (Days 1-50) → Stationary (Days 50-100)")
+    else:
+        st.info("📍 Decay phases: Rapid decline (Days 1-50) → Slow decay (Days 50-100)")
     
     st.subheader("2. Environmental Conditions")
     
@@ -214,7 +245,31 @@ if page == "📊 Overview & Data":
     fig3.update_layout(height=400, showlegend=False)
     st.plotly_chart(fig3, use_container_width=True)
     
-    st.subheader("4. Data Table")
+    st.subheader("4. Dataset Interpretation")
+    
+    if data_mode == 'growth':
+        st.info("""
+        **Growth Dataset Analysis:**
+        - Biomass rises from 0.08 g/L (Day 1) to 1.73 g/L (Day 100)
+        - Growth shows exponential phase (Days 1-50) followed by slower stationary phase (Days 50-100)
+        - Culture approaching maximum carrying capacity
+        - Nitrogen levels decline from 56.5 to 4.35 mg/L (nutrient consumption)
+        - Temperature optimal around 27-28°C
+        - PAR levels sufficient for photosynthesis
+        """)
+    else:
+        st.info("""
+        **Decay Dataset Analysis:**
+        - Biomass declines from 1.80 g/L (Day 1) to 0.36 g/L (Day 100)
+        - Rapid decay in first 50 days, then slower decline
+        - Caused by: nutrient depletion, suboptimal temperature, reduced light
+        - Nitrogen severely depleted (8.0 → 0.5 mg/L)
+        - Temperature suboptimal (18-24°C, too cold)
+        - PAR declining (89 → 63 μmol/m²/s, insufficient light)
+        - Dissolved oxygen decreasing (less photosynthesis)
+        """)
+    
+    st.subheader("5. Data Table")
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 # ========== PAGE 2: MODEL COMPARISON ==========
@@ -501,6 +556,22 @@ elif page == "📖 Documentation":
     ### FYP Title
     **"Physics-Informed Neural Networks for Robust Algal Biomass Estimation under Sparse and Noisy Low-Cost Sensor Datasets"**
     
+    ### Available Datasets
+    
+    **🌱 Growth Dataset (100 days):**
+    - Biomass increase: 0.08 → 1.73 g/L
+    - Favorable environmental conditions
+    - Nutrient availability
+    - Optimal temperature and light
+    
+    **💀 Decay Dataset (100 days):**
+    - Biomass decline: 1.80 → 0.36 g/L
+    - Suboptimal environmental conditions
+    - Nutrient depletion (N: 8.0 → 0.5 mg/L)
+    - Low temperature (18-24°C) and declining light
+    
+    *Use the sidebar to switch between datasets!*
+    
     ### What is a PINN?
     
     A Physics-Informed Neural Network (PINN) is a neural network that learns from both:
@@ -597,4 +668,3 @@ elif page == "📖 Documentation":
 
 # Footer
 st.markdown("---")
-st.caption("🧬 Physics-Informed Neural Network Dashboard | FYP Project | ⚠️ Synthetic Data Validation Only")
